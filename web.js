@@ -39,7 +39,7 @@ http.createServer(function (req, res) {
 		respondCode(res, 0x0005);	
 	}
 
-	if (username === "al" && password === "gowanlea")
+	if (username === "al" && password === "lea")
 	{
 	}
 
