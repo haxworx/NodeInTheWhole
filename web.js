@@ -4,7 +4,6 @@ function respondCode(res, val)
 {
 	res.writeHead(200, {'Content-Type' : 'text/plain'});
 	res.write("status: " + val + "\r\n");
-	console.log("it is " + val);
 	res.end();
 }
 
@@ -13,23 +12,20 @@ function basicError(err)
 {
 	if (err)	
 	{
-		console.log("readError");	
+		console.log("basicError");	
 	}
 }
 
 http.createServer(function (req, res) {
 	var contentLength = req.headers['content-length'];
-	contentLength = 1024;
-	var buffer = new Buffer(contentLength);
 	
 	var fs = require('fs');
+	var buffer = "";
 
-//
-//	if (contentLength != 0)
-//	{
-//		fs.read(process.stdin.fd, buffer, 0, buffer.length, 0, basicError); 
-//	}	
-
+	req.on('data', function(data) {
+		buffer = data.toString();
+	});
+	
 	var username = req.headers['username']; // Username'];
 	var password = req.headers['password'];
 	var action =   req.headers['action'];
@@ -51,18 +47,21 @@ http.createServer(function (req, res) {
 
 	var filename = req.headers['filename'];
 	var path = username + "/" + filename;
-	// check for password via SQL interaction
+
 	var directory = username;
-	directory = "al";
+
 	if (!fs.existsSync(directory))
 	{
 		fs.mkdir(directory, [, 0755]);
 	}
 
-	if (action == "ADD")
+	if (action === "ADD")
 	{
-		fs.WriteFile(path, buffer, basicError);
-	} else if (action == "DEL")
+		req.on('end', function () {
+			console.log("added " + buffer);
+			fs.writeFileSync(path, buffer);
+		});
+	} else if (action === "DEL")
 	{
 		fs.unlink(path, basicError);
 	}
@@ -70,4 +69,4 @@ http.createServer(function (req, res) {
 	respondCode(res, 0x0000);
 }).listen(8080, "127.0.0.1");
 
-console.log("Web Server Running!");
+console.log("Sanctoshare Server Running!");
