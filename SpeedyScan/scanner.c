@@ -7,6 +7,9 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
+int port = 0;
+pthread_mutex_t port_mutex;
+
 int Connect(const char *hostname, int port)
 
 {
@@ -46,7 +49,7 @@ int Connect(const char *hostname, int port)
 	return 0;
 }
 
-#define MAX_THREADS 256
+#define MAX_THREADS 64
 
 struct Connection_t {
 	const char *hostname;
@@ -58,8 +61,12 @@ void *worker(void *connection)
 	struct Connection_t *tmp = (struct Connection_t *) connection;
 
 	struct Connection_t c = *tmp;
+	pthread_mutex_lock(&port_mutex);
+	port++;
+	c.port = port;
+        pthread_mutex_unlock(&port_mutex);
 
-	int connected = Connect(c.hostname, c.port);
+	int connected = Connect(c.hostname, port);
 	if (connected)
 	{
 		printf("Connected to %s on port %d\n", c.hostname, c.port);
@@ -105,7 +112,6 @@ int main(int argc, char **argv)
 
 	pthread_t threads[max_threads];
 
-	int port = 0;
 
 	banner();
 
@@ -116,9 +122,7 @@ int main(int argc, char **argv)
 	for (int y = 0; y < max_threads; y++)
 	{
 		struct Connection_t c;
-		port++;
 		c.hostname = hostname;
-		c.port = port;
 		pthread_create(&threads[y], NULL, worker, &c);
 	}
 
