@@ -53,6 +53,11 @@ http.createServer(function (req, res) {
     if (filename != null && filename != "") {
         var path = username + "/" + filename;
         var directory = username;
+        // wuick fix
+        if (!fs.existsSync(directory)) {
+                fs.mkdir(directory, [, 0755]);
+        }
+
         var outFile = fs.createWriteStream(path);
        	req.pipe(outFile);
     }
