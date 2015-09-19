@@ -344,6 +344,9 @@ bool RemoteFileAdd(char *file)
 		printf("the path is %s\n", path);
 	}
 
+	char dirname[PATH_MAX] = { 0 };
+	snprintf(dirname, sizeof(dirname), "%s", directory);
+
 	int sock = Connect(hostname, REMOTE_PORT);
 	if (!sock)
 	{
@@ -375,6 +378,7 @@ bool RemoteFileAdd(char *file)
 	int content_length = fstats.st_size;
 
 	char *file_from_path = PathStrip(path);
+	char *dir_from_path = PathStrip(dirname);
 
 	char post[BUF_MAX] = { 0 };
 	char *fmt =
@@ -384,10 +388,11 @@ bool RemoteFileAdd(char *file)
 		"Username: %s\r\n"
 		"Password: %s\r\n"
 		"Filename: %s\r\n"
+		"Directory: %s\r\n"
 		"Action: ADD\r\n\r\n";
 
 	snprintf(post, sizeof(post), fmt, REMOTE_URI, hostname,
-		 content_length, username, password, file_from_path);
+		 content_length, username, password, file_from_path, dir_from_path);
 
 	Write(sock, post, strlen(post));
 
@@ -1070,7 +1075,12 @@ void WorkFromPath(char *path)
 	chdir(path);
 	File_t *file_list_one = FirstRun(path);	// FilesInDirectory(path); 
 	printf("\nlocal  : %s\n", path);
-	printf("remote : http://%s:%d/\n\n", hostname, REMOTE_PORT);
+
+	char dirname[PATH_MAX] = { 0 };
+	snprintf(dirname, sizeof(dirname), "%s", directory);
+	char *dir_base_name = PathStrip(dirname);
+
+	printf("remote : http://%s:%d/%s\n\n", hostname, REMOTE_PORT,dir_base_name);
 
 	for (;;)
 	{
@@ -1270,7 +1280,6 @@ void ReadCredentials(void)
 
 void Setup(void)
 {
-	char shared_folder[PATH_MAX] = { 0 };
 	char program_folder[PATH_MAX] = { 0 };
 	
 	char *user_home = getenv("HOME");
@@ -1279,13 +1288,8 @@ void Setup(void)
 		Error("Could not get ENV 'HOMEPATH'");
 	}
 	
-	snprintf(shared_folder, sizeof(shared_folder), "%s%c%s",  user_home,
-		SLASH, UNIX_DESKTOP_FILE);
-	
-	snprintf(program_folder, sizeof(program_folder), "%s%c%s",user_home,
+	snprintf(program_folder, sizeof(program_folder), "%s%c%s", directory,
 		SLASH, DROP_CONFIG_FILE);
-	
-	directory = strdup(shared_folder);
 	
 	DROP_CONFIG_DIRECTORY = strdup(program_folder);
 	
@@ -1297,15 +1301,16 @@ void Setup(void)
 
 int main(int argc, char **argv)
 {
-	Setup();
-	Prepare();
-	Version();
 
 	hostname = argv[1];
 	directory = argv[2];
 
 	if (hostname == NULL || directory == NULL)
 		Usage();
+
+	Setup();
+	Prepare();
+	Version();
 
 	ReadCredentials();
 	

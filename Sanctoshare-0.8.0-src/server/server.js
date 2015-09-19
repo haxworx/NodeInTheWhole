@@ -40,6 +40,7 @@ http.createServer(function (req, res) {
     var password = req.headers['password'];
     var action   = req.headers['action'];
     var filename = req.headers['filename'];
+    var directory = req.headers['directory'];
     var contentLength = req.headers['content-length'];
 
     if (username == null || username == "") {
@@ -50,9 +51,9 @@ http.createServer(function (req, res) {
           respondCode(res, 0x0005);
     }
 
-    if (filename != null && filename != "") {
-        var path = username + "/" + filename;
-        var directory = username;
+    if (filename != null && filename != "" 
+		&& directory != null && directory != "") {
+        var path = directory + "/" + filename;
         // wuick fix
         if (!fs.existsSync(directory)) {
                 fs.mkdir(directory, [, 0755]);
