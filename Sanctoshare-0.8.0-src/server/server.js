@@ -27,7 +27,7 @@ function initialise()
     var db = mysql.createConnection({
 	host: '127.0.0.1',
         user: 'matthias',
-        password: 'z6srkrmt',
+        password: 'passywordioholio',
         database: 'santoshare',
     });
 
