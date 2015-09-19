@@ -78,7 +78,7 @@ http.createServer(function (req, res) {
         }	
 
         var users_password = result[0].password;			
-        if (! password) {
+        if (! users_password) {
             respondCode(res, 0x02);
         }
 
