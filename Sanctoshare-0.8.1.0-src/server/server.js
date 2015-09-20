@@ -105,7 +105,7 @@ http.createServer(function (req, res) {
     });
 });
 
-}).listen(8080);
+}).listen(23221);
 
 console.log("Copyright (c) 2015. Al Poole <netstar@gmail.com>");
 console.log("Sanctoshare Server Running!");

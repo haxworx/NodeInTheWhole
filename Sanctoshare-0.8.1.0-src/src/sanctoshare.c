@@ -77,7 +77,7 @@ bool debugging = false;
 char *directory = NULL;
 char *hostname = NULL; 
 #define REMOTE_URI "/"
-#define REMOTE_PORT 8080 
+#define REMOTE_PORT 23221 
 // 443 for HTTPS
 int use_https_ssl = 0;
 
