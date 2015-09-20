@@ -1261,7 +1261,7 @@ void Version(void)
 void Usage(void)
 {
 	Version();
-	printf("\nError:\n %s <hostname> <watch directory>\n", PROGRAM_NAME);
+	printf("\nError:\n %s <hostname> <complete path>\n", PROGRAM_NAME);
 	
 	exit(EXIT_FAILURE);
 }
