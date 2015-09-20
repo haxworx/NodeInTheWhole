@@ -109,6 +109,16 @@ void init_ssl(void)
 
 char *PathStrip(char *path)
 {
+	if (path == NULL) {
+		return NULL;
+	}
+
+	ssize_t len = strlen(path);
+
+	if (path[len - 1 ] == '/' || path[len -1 ] == '\\') {
+		path[len - 1] = '\0';	
+	}
+
 	char *t = strrchr(path, '\\');
 	if (t)
 	{
