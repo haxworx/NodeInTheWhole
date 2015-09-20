@@ -15,6 +15,9 @@
   
    Major Changes:
 
+   *  As of 0.8.1.0 we now fix upon breakages in connection/transfers etc.
+      see .sanctoshare/process_file usage...
+   
    *  As of version 0.8.0.0 our server uses node.js.
 
    *  As of version 0.8.0.0 we revert to Simplified BSD License.

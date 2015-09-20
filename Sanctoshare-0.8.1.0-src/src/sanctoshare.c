@@ -27,7 +27,7 @@
 */
 
 #define PROGRAM_NAME "Sanctoshare"
-#define PROGRAM_VERSION "0.8.0.0 \"Saint Januarius\""
+#define PROGRAM_VERSION "0.8.1.0 \"Saint Januarius\""
 
 #define _DEFAULT_SOURCE 1
 #include <stdio.h>
@@ -924,25 +924,22 @@ File_t *ListFromStateFile(const char *state_file_path)
 
 void ProcessObject(File_t *object)
 {
-	if (object->changed)
+	switch (object->changed)
 	{
-		switch (object->changed)
-		{
-			case FILE_ADD:
-				RemoteFileAdd(object->path);
-				printf("OK! add remote file %s\n", object->path);
-			break;
+		case FILE_ADD:
+			RemoteFileAdd(object->path);
+			printf("OK! add remote file %s\n", object->path);
+		break;
 		
-			case FILE_MOD:
-				RemoteFileAdd(object->path);
-				printf("OK! mod remote file %s\n", object->path);
-			break;
+		case FILE_MOD:
+			RemoteFileAdd(object->path);
+			printf("OK! mod remote file %s\n", object->path);
+		break;
 		
-			case FILE_DEL:
-				RemoteFileDel(object->path);
-				printf("OK! del remote file %s\n", object->path);
-			break;
-		}
+		case FILE_DEL:
+			RemoteFileDel(object->path);
+			printf("OK! del remote file %s\n", object->path);
+		break;
 	}
 }
 
@@ -988,6 +985,34 @@ void start_job(File_t *object)
 	++n_jobs;
 }
 
+#define PROCESS_FILE "process_file"
+
+char process_file[PATH_MAX] = { 0 };
+
+void process_started(void)
+{
+	FILE *f = fopen(process_file, "w");
+	if (f == NULL) {
+		Error("process_started fopen()");
+	}	
+	fclose(f);
+}
+
+void process_completed(void)
+{
+	unlink(process_file);	
+}
+
+int process_terminated(void)
+{
+	struct stat fstats;
+	if (stat(process_file, &fstats) < 0) {
+		return 0;
+	}
+
+	// file exists, we stopped early	
+	return 1;
+}
 void CompareFileLists(File_t * first, File_t * second)
 {
 	bool store_state = false;
@@ -1000,6 +1025,7 @@ void CompareFileLists(File_t * first, File_t * second)
 	
 	if (modifications)
 	{
+		
 		File_t files[modifications];
 		memset(files, 0, sizeof(File_t) * modifications);
 		int i = 0;
@@ -1029,15 +1055,26 @@ void CompareFileLists(File_t * first, File_t * second)
 		store_state = true;
 
 		int total_files = modifications;	
-		pid_t pids[modifications];
-		memset(&pids, 0, modifications * sizeof(pid_t));
 
+		int failed_run = process_terminated();
+		if (failed_run) {
+		// resend broken ones
+			for (int i = 0; i < total_files; i++) {
+				files[i].changed = FILE_ADD; 
+			}
+		}
+		
+		process_started();
+	
 		for (int i = 0; i < total_files; i++)
 		{
 			start_job(&files[i]);
 		}
 
 		wait_for_all_jobs();
+	
+		process_completed();
+
 		printf("done!\n\n");
 	}
 
@@ -1266,7 +1303,6 @@ void Usage(void)
 	exit(EXIT_FAILURE);
 }
 
-#define WINDOWS_DESKTOP_FILE "Desktop\\ShareFiles"
 #define UNIX_DESKTOP_FILE "Desktop/ShareFiles"
 
 void ReadCredentials(void)
@@ -1303,6 +1339,10 @@ void Setup(void)
 	
 	DROP_CONFIG_DIRECTORY = strdup(program_folder);
 	
+	// this one is for in-process breaks so we resend all!	
+        snprintf(process_file, sizeof(process_file), "%s%c%s", DROP_CONFIG_DIRECTORY,
+                SLASH, PROCESS_FILE);
+
 	if (use_https_ssl)
 	{
 		init_ssl();

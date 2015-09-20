@@ -8,6 +8,7 @@ default:
 	gcc $(CFLAGS) $(SOURCE) $(LIBS) -o $(EXEC)
 
 install:
+	make
 	cp $(EXEC) $(INSTALL_DIR)
 
 clean:
