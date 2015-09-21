@@ -1342,7 +1342,6 @@ void ReadCredentials(void)
 	
 	username = strdup(stringuser);
 	password = strdup(stringpass);
-	free(stringpass);
 }
 
 void Setup(void)
