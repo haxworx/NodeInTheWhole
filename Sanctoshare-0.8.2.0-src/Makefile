@@ -15,4 +15,5 @@ clean:
 	rm $(EXEC)
 
 uninstall:
-	rm /usr/local/bin/sanctoshare
+	make clean
+	-rm /usr/local/bin/sanctoshare

@@ -98,10 +98,14 @@ http.createServer(function (req, res) {
             if (!fs.existsSync(directory)) {
                 fs.mkdir(directory, [, 0755]);
             }
-        //fs.writeFileSync(path, buffer);
-        } else if (action === "DEL") {
-             fs.unlink(path, basicError);
+        } 
+        if (filename != null && directory != null && action != null) {
+        if (action === "DEL") {
+            var path = directory + "/" + filename;
+            fs.unlink(path, basicError);
         }
+       }
+
     });
 });
 

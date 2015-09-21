@@ -27,7 +27,7 @@
 */
 
 #define PROGRAM_NAME "Sanctoshare"
-#define PROGRAM_VERSION "0.8.1.0 \"Saint Januarius\""
+#define PROGRAM_VERSION "0.8.2.0 \"Saint Januarius\""
 
 #define _DEFAULT_SOURCE 1
 #include <stdio.h>
@@ -71,6 +71,24 @@ size_t strlcat(char *d, char const *s, size_t n)
 	return snprintf(d, n, "%s%s", d, s);
 }
 #endif
+
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#define SHM_SIZE 1024
+
+key_t key;
+int shmid;
+char *connection_broken = NULL;
+
+void check_connection(void)
+{
+        if (*connection_broken) {
+                fprintf(stderr, "we had to abort! server is running???\n\n");
+                shmdt(connection_broken);
+                exit( 1 << 7 );
+        }
+}
 
 bool debugging = false;
 
@@ -119,14 +137,7 @@ char *PathStrip(char *path)
 		path[len - 1] = '\0';	
 	}
 
-	char *t = strrchr(path, '\\');
-	if (t)
-	{
-		t++;
-		return t;
-	}
-
-	t = strrchr(path, '/');
+	char *t = strrchr(path, '/');
 	if (t)
 	{
 		t++;
@@ -220,6 +231,8 @@ ssize_t Read(int sock, char *buf, int len)
 
 ssize_t Write(int sock, char *buf, int len)
 {
+	int bytes = 0;
+
 	if (debugging)
 	{
 		printf("%s", buf);
@@ -227,10 +240,13 @@ ssize_t Write(int sock, char *buf, int len)
 
 	if (use_https_ssl)
 	{
-		return BIO_write(bio, buf, len);
+		bytes = BIO_write(bio, buf, len);
+		return bytes;
 	}
+
+	bytes = write(sock, buf, len);	
 	
-	return write(sock, buf, len);
+	return bytes;
 }
 
 int Close(int sock)
@@ -308,7 +324,6 @@ bool Authenticate(void)
 bool RemoteFileDel(char *file)
 {
 	char path[PATH_MAX] = { 0 };
-
 	snprintf(path, sizeof(path), "%s%c%s", directory, SLASH, file);
 	if (debugging)
 	{
@@ -318,11 +333,17 @@ bool RemoteFileDel(char *file)
 	int sock = Connect(hostname, REMOTE_PORT);
 	if (!sock)
 	{
-		Error("Could not Connect()");
+		fprintf(stderr, "Could not connect()\n");
+		return false;
 	}
 
 	int content_length = 0;
+
 	char *file_from_path = PathStrip(path);
+
+	char dirname[PATH_MAX] = { 0 };
+	snprintf(dirname, sizeof(dirname), "%s", directory);
+        char *dir_from_path = PathStrip(dirname);
 
 	char post[BUF_MAX] = { 0 };
 	char *fmt =
@@ -331,11 +352,12 @@ bool RemoteFileDel(char *file)
 		"Content-Length: %d\r\n"
 		"Username: %s\r\n"
 		"Password: %s\r\n"
+		"Directory: %s\r\n"
 		"Filename: %s\r\n"
 		"Action: DEL\r\n\r\n";
 
 	snprintf(post, sizeof(post), fmt, REMOTE_URI, hostname,
-		 content_length, username, password, file_from_path);
+		 content_length, username, password, dir_from_path, file_from_path);
 
 	Write(sock, post, strlen(post));
 
@@ -347,7 +369,6 @@ bool RemoteFileDel(char *file)
 bool RemoteFileAdd(char *file)
 {
 	char path[PATH_MAX] = { 0 };
-
 	snprintf(path, sizeof(path), "%s%c%s", directory, SLASH, file);
 	if (debugging)
 	{
@@ -360,7 +381,8 @@ bool RemoteFileAdd(char *file)
 	int sock = Connect(hostname, REMOTE_PORT);
 	if (!sock)
 	{
-		Error("Could not Connect()");
+		fprintf(stderr, "Could not connect()\n");
+		return false;
 	}
 
 	struct stat fstats;
@@ -420,6 +442,9 @@ bool RemoteFileAdd(char *file)
 			{
 				break;
 			}
+			else if (bytes < 0) {
+				return false;	
+			} 
 			else
 			{
 				size -= bytes;
@@ -430,12 +455,11 @@ bool RemoteFileAdd(char *file)
 
 	if (size != 0)
 	{
-		Error("Did you enter the correct username and password into this client?");
+		Error("wtf?");
 	}
 	
 	Close(sock);
 	fclose(f);
-
 	return true;
 }
 
@@ -767,21 +791,6 @@ File_t *FilesInDirectory(const char *path)
 			continue;
 		}
 
-		if (!strcasecmp(dirent->d_name, "SANCTOSHARE.EXE"))
-		{
-			continue;
-		}
-
-		if (!strcasecmp(dirent->d_name, "CYGWIN1.DLL"))
-		{
-			continue;
-		}
-	
-		if (!strcasecmp(dirent->d_name, "ZIP.VBS"))
-		{
-			continue;
-		}
-
 		unsigned int unix_time_now = time(NULL);
 
 		char path_full[PATH_MAX] = { 0 };
@@ -924,20 +933,30 @@ File_t *ListFromStateFile(const char *state_file_path)
 
 void ProcessObject(File_t *object)
 {
+	bool success = true;
+
 	switch (object->changed)
 	{
 		case FILE_ADD:
-			RemoteFileAdd(object->path);
+			success = RemoteFileAdd(object->path);
+			if (! success) {
+				*connection_broken = 1;
+				exit( 1 << 6 );
+			}
 			printf("OK! add remote file %s\n", object->path);
 		break;
 		
 		case FILE_MOD:
-			RemoteFileAdd(object->path);
+			success = RemoteFileAdd(object->path);
+			if (! success) {
+				*connection_broken = 1;
+				exit (1 << 6);
+			}
 			printf("OK! mod remote file %s\n", object->path);
 		break;
 		
 		case FILE_DEL:
-			RemoteFileDel(object->path);
+			success = RemoteFileDel(object->path);
 			printf("OK! del remote file %s\n", object->path);
 		break;
 	}
@@ -1013,11 +1032,14 @@ int process_terminated(void)
 	// file exists, we stopped early	
 	return 1;
 }
+
 void CompareFileLists(File_t * first, File_t * second)
 {
 	bool store_state = false;
 	int modifications = 0;
 	
+	process_started();
+	// if a child cannot connect get out of here!
 	
 	modifications += ActOnFileAdd(first, second);
 	modifications += ActOnFileDel(first, second);
@@ -1060,23 +1082,23 @@ void CompareFileLists(File_t * first, File_t * second)
 		if (failed_run) {
 		// resend broken ones
 			for (int i = 0; i < total_files; i++) {
-				files[i].changed = FILE_ADD; 
+			//	files[i].changed = FILE_MOD; 
 			}
 		}
 		
-		process_started();
 	
 		for (int i = 0; i < total_files; i++)
 		{
 			start_job(&files[i]);
+			check_connection();
 		}
 
 		wait_for_all_jobs();
 	
-		process_completed();
-
 		printf("done!\n\n");
 	}
+	
+	process_completed();
 
 	if (store_state)
 	{
@@ -1265,8 +1287,6 @@ void Prepare(void)
 	struct stat fstats;
 
 	// weird hack for using Python and Tk toolkit GUI...
-	stdout = stderr;
-	
 	if (stat(DROP_CONFIG_DIRECTORY, &fstats) < 0)
 	{
 		mkdir(DROP_CONFIG_DIRECTORY, 0777);
@@ -1314,9 +1334,9 @@ void ReadCredentials(void)
 	fgets(stringuser, SANESTRING, stdin); Trim(stringuser);
 	
 	char *stringpass = getpass("Password: ");	
-	if (strlen(stringuser) == 0 || strlen(stringpass) == 0)
-	{
-		Usage(); // don't say too much
+	if (strlen(stringuser) == 0 || strlen(stringpass) == 0) {
+		printf("no value!\n");
+		exit(EXIT_FAILURE);
 	}
 	
 	username = strdup(stringuser);
@@ -1327,12 +1347,35 @@ void ReadCredentials(void)
 void Setup(void)
 {
 	char program_folder[PATH_MAX] = { 0 };
+
+	pid_t pid = getpid();
 	
+	key = (int) pid;
+
+	shmid = shmget(key, SHM_SIZE, 0644 | IPC_CREAT);
+	if (shmid < 0) {
+		perror("shmget()");
+		exit(EXIT_FAILURE);
+	}
+	
+	connection_broken = shmat(shmid, (void *) 0, 0);
+	if (connection_broken == (char *)(-1)) {
+		perror("shmat()");
+		exit(EXIT_FAILURE);
+	}
+
+	*connection_broken = 0; // all okay
+
 	char *user_home = getenv("HOME");
 	if (user_home == NULL)
 	{
 		Error("Could not get ENV 'HOMEPATH'");
 	}
+
+        ssize_t len = strlen(directory);
+        if (directory[len - 1] == '/') {
+                directory[len - 1] = '\0';
+        }
 	
 	snprintf(program_folder, sizeof(program_folder), "%s%c%s", directory,
 		SLASH, DROP_CONFIG_FILE);
@@ -1354,6 +1397,7 @@ int main(int argc, char **argv)
 
 	hostname = argv[1];
 	directory = argv[2];
+
 
 	if (hostname == NULL || directory == NULL)
 		Usage();

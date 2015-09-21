@@ -14,6 +14,9 @@
    ./sanctoshare haxlab.org /root/Pictures
   
    Major Changes:
+	
+   *  Ad of 0.8.2.0 using some IPC to look after our children connect() and write()
+      Needs some more work though for in-transfer breakages...
 
    *  As of 0.8.1.0 we now fix upon breakages in connection/transfers etc.
       see .sanctoshare/process_file usage...
