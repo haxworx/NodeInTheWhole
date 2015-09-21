@@ -63,7 +63,7 @@ http.createServer(function (req, res) {
     req.on('end', function() { 
 	// create your own login here ! no nasty SQL stuff
 	// default is "username" and "password" for username and password
-	if (username != "username" && password != "password") {
+	if (username != "username" || password != "password") {
 		respondCode(res, 0x01);
         } else {
             respondCode(res, 0x00);

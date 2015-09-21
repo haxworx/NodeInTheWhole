@@ -1,0 +1,1 @@
+rage *.mp3 >2&1 > /dev/null &

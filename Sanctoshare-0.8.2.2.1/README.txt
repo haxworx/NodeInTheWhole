@@ -7,11 +7,11 @@
   
    Run server.js on remote machine with Node.js.
    
-   ./sanctoshare <hostname> <watch directory>
+   ./sanctoshare username@host:/path/to/directory 
  
    e.g.
    
-   ./sanctoshare haxlab.org /root/Pictures
+   ./sanctoshare dave@trouserlump.com:/home/dave/files
   
    Any client instance on the local computer will send files to the server
    which the server will arrange according to folder name. 

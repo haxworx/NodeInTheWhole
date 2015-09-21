@@ -27,7 +27,7 @@
 */
 
 #define PROGRAM_NAME "Sanctoshare"
-#define PROGRAM_VERSION "0.8.2.1.0 \"Saint Eusebius\""
+#define PROGRAM_VERSION "0.8.2.2.1 \"Saint Eusebius\""
 
 #define _DEFAULT_SOURCE 1
 #include <stdio.h>
@@ -96,13 +96,14 @@ bool debugging = false;
 
 char *directory = NULL;
 char *hostname = NULL; 
-#define REMOTE_URI "/"
-#define REMOTE_PORT 23221 
-// 443 for HTTPS
-int use_https_ssl = 0;
-
 const char *username = NULL;
 const char *password = NULL;
+
+#define REMOTE_URI "/"
+#define REMOTE_PORT 23221 
+// no SSL for now
+int use_https_ssl = 0;
+
 
 static const int parallel_max = 16;
 unsigned int zip_sleep_interval = 5;
@@ -280,7 +281,6 @@ bool Authenticate(void)
 	
 	snprintf(post, sizeof(post), fmt, REMOTE_URI, hostname,
 		username, password);
-	
 	Write(sock, post, strlen(post));
 	
 	char buf[BUF_MAX] = { 0 };
@@ -288,7 +288,6 @@ bool Authenticate(void)
 	ssize_t len = 0;
 	
 	len = Read(sock, buf, sizeof(buf));
-	// twice with SSL wtf???
 	
 	buf[len] = '\0';
 	
@@ -645,6 +644,7 @@ int ActOnFileAdd(File_t * first, File_t * second)
 	return isChanged;
 }
 
+/* Better hide this! 
 void RemoveDirectory(char *path)
 {
 	DIR *d = NULL;
@@ -691,6 +691,21 @@ void RemoveDirectory(char *path)
 
 	closedir(d);
 }
+*/
+
+int RenameDirectory(char *path)
+{
+	ssize_t len = strlen(path);
+
+	char moved[len + 2];
+
+	memset(&moved, 0, len + 2);
+
+	snprintf(moved, len + 2, ".%s", path);
+	printf("move dir %s to %s\n", path, moved);
+
+	return rename(path, moved);
+}
 
 bool CreateTarFile(char *path)
 {
@@ -716,7 +731,8 @@ bool CreateTarFile(char *path)
 	}
 	
 	pid = wait(NULL);
-	RemoveDirectory(path);
+	//RemoveDirectory(path);
+	RenameDirectory(path);
 		
 	return true;
 }
@@ -766,7 +782,7 @@ bool CreateZipFile(char *path)
 
 	
 	p = wait(NULL);
-	RemoveDirectory(path);	
+	RenameDirectory(path);	
 
 	return true;
 }
@@ -1104,6 +1120,8 @@ void CompareFileLists(File_t * first, File_t * second)
 	}
 }
 
+unsigned int new_repository = 0;
+
 File_t *FirstRun(char *path)
 {
 	char state_file_path[PATH_MAX] = { 0 };
@@ -1123,15 +1141,29 @@ File_t *FirstRun(char *path)
 		}
 
 		list = FilesInDirectory(path);
+
+		if (new_repository) {
+			printf("\ninitialising new repository\n");
+			File_t *cursor = list->next;
+			while (cursor) {
+				cursor->changed = FILE_ADD;			
+				printf("init file %s\n", cursor->path);
+				
+				start_job(cursor);
+				cursor = cursor->next;
+			}
+			wait_for_all_jobs();
+			printf("done!\n");
+		}
 	}
 	else
 	{
 		list = ListFromStateFile(state_file_path);
 	}
 
-
 	return list;
 }
+	
 
 // time between scans of path in MonitorPath
 unsigned int changes_interval = 2;
@@ -1282,24 +1314,6 @@ config_t *ConfigLoad(void)
 }
 */
 
-// Am I going to do a poo Jez???
-void Prepare(void)
-{
-	struct stat fstats;
-
-	// weird hack for using Python and Tk toolkit GUI...
-	if (stat(DROP_CONFIG_DIRECTORY, &fstats) < 0)
-	{
-		mkdir(DROP_CONFIG_DIRECTORY, 0777);
-	}
-
-	if (stat(directory, &fstats) < 0)
-	{
-		// we need to make the directory to drop files into!
-		mkdir(directory, 0777);
-	}
-}
-
 void About(void)
 {
 	printf("Copyright (c) 2015. Al Poole <netstar@gmail.com>.\n");
@@ -1326,25 +1340,31 @@ void Usage(void)
 
 #define UNIX_DESKTOP_FILE "Desktop/ShareFiles"
 
-void ReadCredentials(void)
+void check_remote_auth(void)
 {
 	#define SANESTRING 80
 	char stringuser[BUF_MAX] = { 0 };
-	
-	printf("\nUsername: "); fflush(stdout);
-	fgets(stringuser, SANESTRING, stdin); Trim(stringuser);
-	
-	char *stringpass = getpass("Password: ");	
-	if (strlen(stringuser) == 0 || strlen(stringpass) == 0) {
-		printf("\nempty string aborting!!\n");
-		exit(EXIT_FAILURE);
+	if (username == NULL) {	
+		printf("\nUsername: "); fflush(stdout);
+		fgets(stringuser, SANESTRING, stdin); Trim(stringuser);
+		username = strdup(stringuser);
+		if(strlen(stringuser) == 0) {
+			exit(1 << 3);
+		}
+	}
+
+	char echo_to_screen[BUF_MAX] = { 0 };
+	snprintf(echo_to_screen, BUF_MAX, "%s@%s's password: ", username, hostname);
+	char *stringpass = getpass(echo_to_screen);	
+	if (strlen(stringpass) == 0) {
+		exit( 1 << 3);
 	}
 	
-	username = strdup(stringuser);
 	password = strdup(stringpass);
+	Authenticate();
 }
 
-void Setup(void)
+void get_ready(void)
 {
 	char program_folder[PATH_MAX] = { 0 };
 
@@ -1390,26 +1410,77 @@ void Setup(void)
 	{
 		init_ssl();
 	}
+
+        struct stat fstats;
+
+        if (stat(DROP_CONFIG_DIRECTORY, &fstats) < 0)
+        {
+                mkdir(DROP_CONFIG_DIRECTORY, 0777);
+                new_repository = 1;
+        }
+
+        if (stat(directory, &fstats) < 0)
+        {
+                mkdir(directory, 0777);
+        }
+}
+
+// username@hostname:directory
+
+void show_usage(char *exec_name)
+{
+	printf("%s username@host:/path/to/dir\n", exec_name);
+	exit(EXIT_FAILURE);
+}
+
+#define COMMAND_ARGS_FMT "%s@%s:%s"
+
+void get_user_host_rsrc(char **args)
+{
+	char user[BUF_MAX] = { 0 };
+	char host[BUF_MAX] = { 0 };
+	char rsrc[BUF_MAX] = { 0 };
+	char *string_copy = strdup(args[1]);
+
+	char *s = strchr(string_copy, '@');
+	if (!s) 
+		show_usage(args[0]);
+	*s = '\0';
+	snprintf(user, sizeof(user), "%s", string_copy);
+
+	string_copy = s + 1;
+
+	s = strchr(string_copy, ':');
+	if (!s)	
+		show_usage(args[0]);
+	*s = '\0';
+	snprintf(host, sizeof(host), "%s", string_copy);
+
+	string_copy = s + 1;
+	if (!s)
+		show_usage(args[0]);
+	
+	snprintf(rsrc, sizeof(rsrc), "%s", string_copy);
+
+	username = strdup(user);
+	hostname = strdup(host);
+	directory = strdup(rsrc);
 }
 
 int main(int argc, char **argv)
 {
+	if (argc < 2) {
+		show_usage(argv[0]);
+	} else {
+		get_user_host_rsrc(argv);
+	}
 
-	hostname = argv[1];
-	directory = argv[2];
-
-
-	if (hostname == NULL || directory == NULL)
-		Usage();
-
-	Setup();
-	Prepare();
 	Version();
 
-	ReadCredentials();
-	
-	Authenticate();
+	check_remote_auth();
 
+	get_ready();
+	
 	WorkFromPath(directory);
 
 	return EXIT_SUCCESS;
