@@ -27,7 +27,7 @@
 */
 
 #define PROGRAM_NAME "Sanctoshare"
-#define PROGRAM_VERSION "0.8.2.0 \"Saint Januarius\""
+#define PROGRAM_VERSION "0.8.2.1.0 \"Saint Eusebius\""
 
 #define _DEFAULT_SOURCE 1
 #include <stdio.h>
@@ -81,13 +81,15 @@ key_t key;
 int shmid;
 char *connection_broken = NULL;
 
-void check_connection(void)
+int check_connection(void)
 {
         if (*connection_broken) {
                 fprintf(stderr, "we had to abort! server is running???\n\n");
                 shmdt(connection_broken);
-                exit( 1 << 7 );
+		exit(1 << 8);
         }
+	
+	return (int) *connection_broken;
 }
 
 bool debugging = false;
@@ -431,13 +433,16 @@ bool RemoteFileAdd(char *file)
 	int total = 0;
 
 	int size = content_length;
-
 	while (size)
 	{
 		while (1)
 		{
 			int count = fread(buffer, 1, CHUNK, f);
-			int bytes = Write(sock, buffer, count);
+			ssize_t bytes = send(sock, buffer, count, 0);
+			//int bytes = Write(sock, buffer, count);
+			if (bytes < count) {
+				return false;
+			}
 			if (bytes == 0)
 			{
 				break;
@@ -460,6 +465,7 @@ bool RemoteFileAdd(char *file)
 	
 	Close(sock);
 	fclose(f);
+
 	return true;
 }
 
@@ -931,35 +937,34 @@ File_t *ListFromStateFile(const char *state_file_path)
 
 #define COMMAND_MAX 2048
 
-void ProcessObject(File_t *object)
+bool ProcessObject(File_t *object)
 {
 	bool success = true;
-
 	switch (object->changed)
 	{
 		case FILE_ADD:
 			success = RemoteFileAdd(object->path);
-			if (! success) {
-				*connection_broken = 1;
-				exit( 1 << 6 );
+			if (success) {
+				printf("OK! add remote file %s\n", object->path);
 			}
-			printf("OK! add remote file %s\n", object->path);
 		break;
 		
 		case FILE_MOD:
 			success = RemoteFileAdd(object->path);
-			if (! success) {
-				*connection_broken = 1;
-				exit (1 << 6);
+			if (success) {
+				printf("OK! mod remote file %s\n", object->path);
 			}
-			printf("OK! mod remote file %s\n", object->path);
 		break;
 		
 		case FILE_DEL:
 			success = RemoteFileDel(object->path);
-			printf("OK! del remote file %s\n", object->path);
+			if (success) {
+				printf("OK! del remote file %s\n", object->path);
+			}
 		break;
 	}
+
+	return success;
 }
 
 #include <sys/wait.h>
@@ -986,6 +991,7 @@ void wait_for_all_jobs(void)
 
 void start_job(File_t *object)
 {
+	check_connection();
 	pid_t p;
 	if (n_jobs == parallel_max)
 	{
@@ -998,7 +1004,10 @@ void start_job(File_t *object)
 	}
 	else if (p == 0)
 	{
-		ProcessObject(object);
+		bool status = ProcessObject(object);
+		if (!status) {
+			*connection_broken = 1;
+		}
 		exit(1);
 	}
 	++n_jobs;
@@ -1079,9 +1088,7 @@ void CompareFileLists(File_t * first, File_t * second)
 
 		for (int i = 0; i < total_files; i++)
 		{
-			check_connection();
 			start_job(&files[i]);
-			check_connection();
 		}
 
 		wait_for_all_jobs();
@@ -1091,7 +1098,7 @@ void CompareFileLists(File_t * first, File_t * second)
 	
 	process_completed();
 
-	if (store_state)
+	if (!*connection_broken && store_state)
 	{
 		SaveFileState(second);
 	}
@@ -1144,16 +1151,19 @@ void WorkFromPath(char *path)
 
 	for (;;)
 	{
+		check_connection();
 		sleep(changes_interval);
 
 		if (debugging)
 		{
 			puts("PING!");
 		}
-
+		
+		check_connection();
 		File_t *file_list_two = FilesInDirectory(path);
 
 		CompareFileLists(file_list_one, file_list_two);
+		check_connection();
 
 		FileListFree(file_list_one);
 		file_list_one = file_list_two;
@@ -1326,7 +1336,7 @@ void ReadCredentials(void)
 	
 	char *stringpass = getpass("Password: ");	
 	if (strlen(stringuser) == 0 || strlen(stringpass) == 0) {
-		printf("no value!\n");
+		printf("\nempty string aborting!!\n");
 		exit(EXIT_FAILURE);
 	}
 	
