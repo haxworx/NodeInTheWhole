@@ -1047,7 +1047,6 @@ void CompareFileLists(File_t * first, File_t * second)
 	
 	if (modifications)
 	{
-		
 		File_t files[modifications];
 		memset(files, 0, sizeof(File_t) * modifications);
 		int i = 0;
@@ -1078,17 +1077,9 @@ void CompareFileLists(File_t * first, File_t * second)
 
 		int total_files = modifications;	
 
-		int failed_run = process_terminated();
-		if (failed_run) {
-		// resend broken ones
-			for (int i = 0; i < total_files; i++) {
-			//	files[i].changed = FILE_MOD; 
-			}
-		}
-		
-	
 		for (int i = 0; i < total_files; i++)
 		{
+			check_connection();
 			start_job(&files[i]);
 			check_connection();
 		}
