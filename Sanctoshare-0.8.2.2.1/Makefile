@@ -1,7 +1,7 @@
-SOURCE=src/sanctoshare.c
+SOURCE=src/drop.c
 INSTALL_DIR=/usr/local/bin
 CFLAGS=-std=c99 -Wall -Werror -pedantic 
-EXEC=sanctoshare
+EXEC=drop
 LIBS=-lssl -lcrypto 
 
 default:
@@ -16,4 +16,4 @@ clean:
 
 uninstall:
 	make clean
-	-rm /usr/local/bin/sanctoshare
+	-rm /usr/local/bin/$(EXEC)

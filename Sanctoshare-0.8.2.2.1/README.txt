@@ -7,11 +7,11 @@
   
    Run server.js on remote machine with Node.js.
    
-   ./sanctoshare username@host:/path/to/directory 
+   $ drop username@host:/path/to/directory 
  
    e.g.
    
-   ./sanctoshare dave@trouserlump.com:/home/dave/files
+   $ drop dave@trouserlump.com:/home/dave/files
   
    Any client instance on the local computer will send files to the server
    which the server will arrange according to folder name. 
@@ -19,6 +19,8 @@
    The "watch directory" should be the full path. This stops confusion!
 
    Major Changes:
+
+   *  Chanegd name to "drop" and version to 0.2.2.0
 
    *  As of 0.8.2.1 the IPC has been fixed and improved upon.
       Will resend if broken transfer has occurred upon next run.
@@ -31,7 +33,7 @@
       write(). Needs some more work though for in-transfer breakages...
 
    *  As of 0.8.1.0 we now fix upon breakages in connection/transfers etc.
-      see .sanctoshare/process_file usage...
+      see .drop/process_file usage...
    
    *  As of version 0.8.0.0 our server uses node.js.
 

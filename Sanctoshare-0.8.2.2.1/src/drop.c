@@ -26,8 +26,8 @@
 
 */
 
-#define PROGRAM_NAME "Sanctoshare"
-#define PROGRAM_VERSION "0.8.2.2.1 \"Saint Eusebius\""
+#define PROGRAM_NAME "drop"
+#define PROGRAM_VERSION "0.2.2.2 \"Saint Eusebius\""
 
 #define _DEFAULT_SOURCE 1
 #include <stdio.h>
@@ -93,7 +93,7 @@ int check_connection(void)
 }
 
 bool debugging = false;
-
+int run_once = 1;
 char *directory = NULL;
 char *hostname = NULL; 
 const char *username = NULL;
@@ -847,7 +847,7 @@ File_t *FilesInDirectory(const char *path)
 //#define DROP_CONFIG_DIRECTORY "DROP_CONFIGURATION"
 char *DROP_CONFIG_DIRECTORY = NULL;
 
-#define DROP_CONFIG_FILE ".sanctoshare"
+#define DROP_CONFIG_FILE ".drop"
 #define DROP_STATE_FILE "state_file"
 
 void SaveFileState(File_t * list)
@@ -1058,6 +1058,8 @@ int process_terminated(void)
 	return 1;
 }
 
+unsigned int new_repository = 0;
+
 void CompareFileLists(File_t * first, File_t * second)
 {
 	bool store_state = false;
@@ -1114,13 +1116,12 @@ void CompareFileLists(File_t * first, File_t * second)
 	
 	process_completed();
 
-	if (!*connection_broken && store_state)
+	if ((!*connection_broken) && (new_repository || store_state))
 	{
 		SaveFileState(second);
 	}
 }
 
-unsigned int new_repository = 0;
 
 File_t *FirstRun(char *path)
 {
@@ -1143,7 +1144,6 @@ File_t *FirstRun(char *path)
 		list = FilesInDirectory(path);
 
 		if (new_repository) {
-			printf("\ninitialising new repository\n");
 			File_t *cursor = list->next;
 			while (cursor) {
 				cursor->changed = FILE_ADD;			
@@ -1173,13 +1173,13 @@ void WorkFromPath(char *path)
 {
 	chdir(path);
 	File_t *file_list_one = FirstRun(path);	// FilesInDirectory(path); 
-	printf("\nlocal  : %s\n", path);
+	//printf("\nlocal  : %s\n", path);
 
-	char dirname[PATH_MAX] = { 0 };
-	snprintf(dirname, sizeof(dirname), "%s", directory);
-	char *dir_base_name = PathStrip(dirname);
+	//char dirname[PATH_MAX] = { 0 };
+	//snprintf(dirname, sizeof(dirname), "%s", directory);
+	//char *dir_base_name = PathStrip(dirname);
 
-	printf("remote : http://%s:%d/%s\n\n", hostname, REMOTE_PORT,dir_base_name);
+	//printf("remote : http://%s:%d/%s\n\n", hostname, REMOTE_PORT,dir_base_name);
 
 	for (;;)
 	{
@@ -1198,6 +1198,10 @@ void WorkFromPath(char *path)
 		check_connection();
 
 		FileListFree(file_list_one);
+		if (run_once) {
+			free(file_list_two);
+			return;
+		}
 		file_list_one = file_list_two;
 	}
 }
@@ -1327,7 +1331,7 @@ void AboutRemoteURL(void)
 void Version(void)
 {
 	About();
-	printf("Sanctoshare version %s\n", PROGRAM_VERSION);
+	printf("drop version %s\n", PROGRAM_VERSION);
 }
 
 void Usage(void)
@@ -1423,28 +1427,38 @@ void get_ready(void)
         {
                 mkdir(directory, 0777);
         }
+
+	char state_file_path[PATH_MAX] = { 0 };
+	snprintf(state_file_path, PATH_MAX, "%s%c%s", DROP_CONFIG_DIRECTORY,
+                 SLASH, DROP_STATE_FILE);
+
+	if (stat(state_file_path, &fstats) < 0) {
+		new_repository = 1;
+	}
 }
 
 // username@hostname:directory
 
-void show_usage(char *exec_name)
+void show_usage(void)
 {
-	printf("%s username@host:/path/to/dir\n", exec_name);
+	printf("%s [OPTIONS] username@host:/path/to/dir\n", PROGRAM_NAME);
+	printf("OPTIONS:\n");
+	printf("    -l    loop forever\n");
 	exit(EXIT_FAILURE);
 }
 
 #define COMMAND_ARGS_FMT "%s@%s:%s"
 
-void get_user_host_rsrc(char **args)
+void get_user_host_rsrc(char *cmd)
 {
 	char user[BUF_MAX] = { 0 };
 	char host[BUF_MAX] = { 0 };
 	char rsrc[BUF_MAX] = { 0 };
-	char *string_copy = strdup(args[1]);
+	char *string_copy = strdup(cmd);
 
 	char *s = strchr(string_copy, '@');
 	if (!s) 
-		show_usage(args[0]);
+		show_usage();
 	*s = '\0';
 	snprintf(user, sizeof(user), "%s", string_copy);
 
@@ -1452,13 +1466,13 @@ void get_user_host_rsrc(char **args)
 
 	s = strchr(string_copy, ':');
 	if (!s)	
-		show_usage(args[0]);
+		show_usage();
 	*s = '\0';
 	snprintf(host, sizeof(host), "%s", string_copy);
 
 	string_copy = s + 1;
 	if (!s)
-		show_usage(args[0]);
+		show_usage();
 	
 	snprintf(rsrc, sizeof(rsrc), "%s", string_copy);
 
@@ -1470,10 +1484,26 @@ void get_user_host_rsrc(char **args)
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
-		show_usage(argv[0]);
-	} else {
-		get_user_host_rsrc(argv);
+		show_usage();
+	} 
+	char *cmd_string = argv[1];
+
+	for (int i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "-l")) {
+			run_once = 0;
+			cmd_string = argv[2];
+		}
+		
+		if (!strcmp(argv[i], "-h")) {
+			show_usage();
+		}
 	}
+	
+	if (cmd_string == NULL) {
+		show_usage();
+	}
+
+	get_user_host_rsrc(cmd_string);
 
 	Version();
 
