@@ -112,5 +112,5 @@ http.createServer(function (req, res) {
 }).listen(23221);
 
 console.log("Copyright (c) 2015. Al Poole <netstar@gmail.com>");
-console.log("Sanctoshare Server Running!");
+console.log("Drop Server Running!");
 
