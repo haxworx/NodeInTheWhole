@@ -128,16 +128,10 @@ void init_ssl(void)
 	OpenSSL_add_all_algorithms();
 }
 
-char *PathStrip(char *path)
+char *file_name_from_path(char *path)
 {
 	if (path == NULL) {
 		return NULL;
-	}
-
-	ssize_t len = strlen(path);
-
-	if (path[len - 1 ] == '/' || path[len -1 ] == '\\') {
-		path[len - 1] = '\0';	
 	}
 
 	char *t = strrchr(path, '/');
@@ -263,7 +257,7 @@ int Close(int sock)
 	return close(sock);
 }
 
-bool Authenticate(void)
+bool authenticate(void)
 {
 	int sock = Connect(hostname, REMOTE_PORT);
 	if (!sock)
@@ -294,7 +288,7 @@ bool Authenticate(void)
 	// bogus but works
 	#define AUTH_STATUS_STR "status: "
 	int status = 1000;
-	char *start_of_code = strstr(buf, "status: ");
+	char *start_of_code = strstr(buf, AUTH_STATUS_STR);
 	if (start_of_code)
 	{
 		start_of_code = strchr(start_of_code, ':');
@@ -322,7 +316,7 @@ bool Authenticate(void)
 	return true;
 }
 
-bool RemoteFileDel(char *file)
+bool remote_file_del(char *file)
 {
 	char path[PATH_MAX] = { 0 };
 	snprintf(path, sizeof(path), "%s%c%s", directory, SLASH, file);
@@ -340,11 +334,11 @@ bool RemoteFileDel(char *file)
 
 	int content_length = 0;
 
-	char *file_from_path = PathStrip(path);
+	char *file_from_path = file_name_from_path(path);
 
 	char dirname[PATH_MAX] = { 0 };
 	snprintf(dirname, sizeof(dirname), "%s", directory);
-        char *dir_from_path = PathStrip(dirname);
+        char *dir_from_path = file_name_from_path(dirname);
 
 	char post[BUF_MAX] = { 0 };
 	char *fmt =
@@ -367,7 +361,7 @@ bool RemoteFileDel(char *file)
 	return true;
 }
 
-bool RemoteFileAdd(char *file)
+bool remote_file_add(char *file)
 {
 	char path[PATH_MAX] = { 0 };
 	snprintf(path, sizeof(path), "%s%c%s", directory, SLASH, file);
@@ -410,8 +404,8 @@ bool RemoteFileAdd(char *file)
 
 	int content_length = fstats.st_size;
 
-	char *file_from_path = PathStrip(path);
-	char *dir_from_path = PathStrip(dirname);
+	char *file_from_path = file_name_from_path(path);
+	char *dir_from_path = file_name_from_path(dirname);
 
 	char post[BUF_MAX] = { 0 };
 	char *fmt =
@@ -437,8 +431,9 @@ bool RemoteFileAdd(char *file)
 		while (1)
 		{
 			int count = fread(buffer, 1, CHUNK, f);
-			ssize_t bytes = send(sock, buffer, count, 0);
-			//int bytes = Write(sock, buffer, count);
+			//ssize_t bytes = send(sock, buffer, count, 0);
+			// this is exactly the same with 0 flag
+		 	ssize_t bytes = Write(sock, buffer, count);
 			if (bytes < count) {
 				return false;
 			}
@@ -480,7 +475,7 @@ struct File_t
 };
 
 // haircut anyone???
-void Trim(char *string)
+void chomp(char *string)
 {
 	char *s = string;
 
@@ -495,23 +490,7 @@ void Trim(char *string)
 	}
 }
 
-void WindowsSanifyPath(char *path)
-{
-	char *p = path;
-
-	while (*p)
-	{
-		if (*p == '\\')
-		{
-			*p = '/';
-		}
-		
-		p++;
-	}
-}
-
-
-void FileListFree(File_t * list)
+void file_list_free(File_t * list)
 {
 	File_t *c = list;
 
@@ -525,7 +504,7 @@ void FileListFree(File_t * list)
 }
 
 
-void FileListAdd(File_t * list, char *path, ssize_t size, unsigned int mode,
+void file_list_add(File_t * list, char *path, ssize_t size, unsigned int mode,
 		 unsigned int mtime)
 {
 	File_t *c = list;
@@ -546,9 +525,7 @@ void FileListAdd(File_t * list, char *path, ssize_t size, unsigned int mode,
 		c = c->next;
 		c->next = NULL;
 
-		char *p = PathStrip(path);
-		
-		WindowsSanifyPath(p);
+		char *p = file_name_from_path(path);
 		
 		strlcpy(c->path, p, PATH_MAX);
 		c->mode = mode;
@@ -562,7 +539,7 @@ void FileListAdd(File_t * list, char *path, ssize_t size, unsigned int mode,
 #define FILE_MOD 0x02
 #define FILE_DEL 0x03
 
-File_t *FileExists(File_t * list, char *filename)
+File_t *file_exists(File_t * list, char *filename)
 {
 	File_t *f = list;
 
@@ -578,14 +555,14 @@ File_t *FileExists(File_t * list, char *filename)
 	return NULL;
 }
 
-int ActOnFileDel(File_t * first, File_t * second)
+int act_on_file_del(File_t * first, File_t * second)
 {
 	File_t *f = first;
 	int isChanged = 0;
 	
 	while (f)
 	{
-		File_t *exists = FileExists(second, f->path);
+		File_t *exists = file_exists(second, f->path);
 		if (!exists)
 		{
 			f->changed = FILE_DEL;
@@ -599,14 +576,14 @@ int ActOnFileDel(File_t * first, File_t * second)
 	return isChanged;
 }
 
-int ActOnFileMod(File_t * first, File_t * second)
+int act_on_file_mod(File_t * first, File_t * second)
 {
 	File_t *f = second;
 	int isChanged = 0;
 	
 	while (f)
 	{
-		File_t *exists = FileExists(first, f->path);
+		File_t *exists = file_exists(first, f->path);
 		if (exists)
 		{
 			if (f->mtime != exists->mtime)
@@ -623,14 +600,14 @@ int ActOnFileMod(File_t * first, File_t * second)
 	return isChanged;
 }
 
-int ActOnFileAdd(File_t * first, File_t * second)
+int act_on_file_add(File_t * first, File_t * second)
 {
 	File_t *f = second;
 	int isChanged = 0;
 	
 	while (f)
 	{
-		File_t *exists = FileExists(first, f->path);
+		File_t *exists = file_exists(first, f->path);
 		if (!exists)
 		{
 			f->changed = FILE_ADD;
@@ -693,7 +670,7 @@ void RemoveDirectory(char *path)
 }
 */
 
-int RenameDirectory(char *path)
+int rename_directory(char *path)
 {
 	ssize_t len = strlen(path);
 
@@ -707,7 +684,7 @@ int RenameDirectory(char *path)
 	return rename(path, moved);
 }
 
-bool CreateTarFile(char *path)
+bool create_tar_file(char *path)
 {
 	char tar_file_path[PATH_MAX] = { 0 };
 	snprintf(tar_file_path, sizeof(tar_file_path), "%s.tar.gz", path);
@@ -732,13 +709,13 @@ bool CreateTarFile(char *path)
 	
 	pid = wait(NULL);
 	//RemoveDirectory(path);
-	RenameDirectory(path);
+	rename_directory(path);
 		
 	return true;
 }
 
 
-bool CreateZipFile(char *path)
+bool create_zip_file(char *path)
 {
 	char zip_file_path[PATH_MAX] = { 0 };
 	snprintf(zip_file_path, sizeof(zip_file_path), "%s.zip", path);
@@ -782,7 +759,7 @@ bool CreateZipFile(char *path)
 
 	
 	p = wait(NULL);
-	RenameDirectory(path);	
+	rename_directory(path);	
 
 	return true;
 }
@@ -790,7 +767,7 @@ bool CreateZipFile(char *path)
 #include <strings.h>
 #include <errno.h>
 
-File_t *FilesInDirectory(const char *path)
+File_t *files_in_directory(const char *path)
 {
 	DIR *d = NULL;
 	struct dirent *dirent = NULL;
@@ -829,11 +806,11 @@ File_t *FilesInDirectory(const char *path)
 				// Let directories bloom!
 			}
 			//sleep(zip_sleep_interval);
-			CreateTarFile(dirent->d_name);		
+			create_tar_file(dirent->d_name);		
 		}
 		else
 		{
-			FileListAdd(list, path_full, fs.st_size, fs.st_mode,
+			file_list_add(list, path_full, fs.st_size, fs.st_mode,
 				    fs.st_mtime);
 		}
 	}
@@ -844,17 +821,16 @@ File_t *FilesInDirectory(const char *path)
 }
 
 #define STATE_FILE_FORMAT "%s\t%u\t%u\t%u"
-//#define DROP_CONFIG_DIRECTORY "DROP_CONFIGURATION"
-char *DROP_CONFIG_DIRECTORY = NULL;
+char *drop_config_directory = NULL;
 
-#define DROP_CONFIG_FILE ".drop"
+#define DROP_CONFIG_DIR_NAME ".drop"
 #define DROP_STATE_FILE "state_file"
 
-void SaveFileState(File_t * list)
+void save_file_list_state(File_t * list)
 {
 	char state_file_path[PATH_MAX] = { 0 };
 
-	snprintf(state_file_path, PATH_MAX, "%s%c%s", DROP_CONFIG_DIRECTORY,
+	snprintf(state_file_path, PATH_MAX, "%s%c%s", drop_config_directory,
 		 SLASH, DROP_STATE_FILE);
 
 	FILE *f = fopen(state_file_path, "w");
@@ -880,7 +856,7 @@ void SaveFileState(File_t * list)
 }
 
 // This is slightly bogus but it does work...
-bool GetStateFileValues(char *text, char *buf, int *size, int *mode, int *ctime)
+bool get_list_from_state_file(char *text, char *buf, int *size, int *mode, int *ctime)
 {
 	const char delim[] = "\t\0";
 	
@@ -910,7 +886,7 @@ bool GetStateFileValues(char *text, char *buf, int *size, int *mode, int *ctime)
 	return false;	
 }
 
-File_t *ListFromStateFile(const char *state_file_path)
+File_t *files_from_state_file(const char *state_file_path)
 {
 	FILE *f = fopen(state_file_path, "r");
 	if (f == NULL)
@@ -929,20 +905,13 @@ File_t *ListFromStateFile(const char *state_file_path)
 	char line[1024] = { 0 };
 	while ((fgets(line, sizeof(line), f)) != NULL)
 	{
-		Trim(line);
+		chomp(line);
 		
-		/*int result = sscanf(line, STATE_FILE_FORMAT, path, &s, &m, &t);
-		if (result == 4)
-		{
-			
-			FileListAdd(list, path, s, m, t);
-		}
-		*/
 		int mtime, size, mode;
-		bool status = GetStateFileValues(line, path, &size, &mode, &mtime);
+		bool status = get_list_from_state_file(line, path, &size, &mode, &mtime);
 		if (status)
 		{
-			FileListAdd(list, path, size, mode, mtime);
+			file_list_add(list, path, size, mode, mtime);
 		}
 	}
 
@@ -953,27 +922,27 @@ File_t *ListFromStateFile(const char *state_file_path)
 
 #define COMMAND_MAX 2048
 
-bool ProcessObject(File_t *object)
+bool process_object(File_t *object)
 {
 	bool success = true;
 	switch (object->changed)
 	{
 		case FILE_ADD:
-			success = RemoteFileAdd(object->path);
+			success = remote_file_add(object->path);
 			if (success) {
 				printf("OK! add remote file %s\n", object->path);
 			}
 		break;
 		
 		case FILE_MOD:
-			success = RemoteFileAdd(object->path);
+			success = remote_file_add(object->path);
 			if (success) {
 				printf("OK! mod remote file %s\n", object->path);
 			}
 		break;
 		
 		case FILE_DEL:
-			success = RemoteFileDel(object->path);
+			success = remote_file_del(object->path);
 			if (success) {
 				printf("OK! del remote file %s\n", object->path);
 			}
@@ -1020,7 +989,7 @@ void start_job(File_t *object)
 	}
 	else if (p == 0)
 	{
-		bool status = ProcessObject(object);
+		bool status = process_object(object);
 		if (!status) {
 			*connection_broken = 1;
 		}
@@ -1029,48 +998,18 @@ void start_job(File_t *object)
 	++n_jobs;
 }
 
-#define PROCESS_FILE "process_file"
-
-char process_file[PATH_MAX] = { 0 };
-
-void process_started(void)
-{
-	FILE *f = fopen(process_file, "w");
-	if (f == NULL) {
-		Error("process_started fopen()");
-	}	
-	fclose(f);
-}
-
-void process_completed(void)
-{
-	unlink(process_file);	
-}
-
-int process_terminated(void)
-{
-	struct stat fstats;
-	if (stat(process_file, &fstats) < 0) {
-		return 0;
-	}
-
-	// file exists, we stopped early	
-	return 1;
-}
-
 unsigned int new_repository = 0;
 
-void CompareFileLists(File_t * first, File_t * second)
+void compare_file_lists(File_t * first, File_t * second)
 {
 	bool store_state = false;
 	int modifications = 0;
 	
-	process_started();
 	// if a child cannot connect get out of here!
 	
-	modifications += ActOnFileAdd(first, second);
-	modifications += ActOnFileDel(first, second);
-	modifications += ActOnFileMod(first, second);
+	modifications += act_on_file_add(first, second);
+	modifications += act_on_file_del(first, second);
+	modifications += act_on_file_mod(first, second);
 	
 	if (modifications)
 	{
@@ -1113,21 +1052,19 @@ void CompareFileLists(File_t * first, File_t * second)
 	
 		printf("done!\n\n");
 	}
-	
-	process_completed();
 
 	if ((!*connection_broken) && (new_repository || store_state))
 	{
-		SaveFileState(second);
+		save_file_list_state(second);
 	}
 }
 
 
-File_t *FirstRun(char *path)
+File_t *first_run(char *path)
 {
 	char state_file_path[PATH_MAX] = { 0 };
 
-	snprintf(state_file_path, PATH_MAX, "%s%c%s", DROP_CONFIG_DIRECTORY,
+	snprintf(state_file_path, PATH_MAX, "%s%c%s", drop_config_directory,
 		 SLASH, DROP_STATE_FILE);
 
 	struct stat fstats;
@@ -1141,7 +1078,7 @@ File_t *FirstRun(char *path)
 			printf("this is the first run\n");
 		}
 
-		list = FilesInDirectory(path);
+		list = files_in_directory(path);
 
 		if (new_repository) {
 			File_t *cursor = list->next;
@@ -1158,32 +1095,22 @@ File_t *FirstRun(char *path)
 	}
 	else
 	{
-		list = ListFromStateFile(state_file_path);
+		list = files_from_state_file(state_file_path);
 	}
 
 	return list;
 }
 	
 
-// time between scans of path in MonitorPath
 unsigned int changes_interval = 2;
 // 2 seconds like our old friend arcs :-)
 
-void WorkFromPath(char *path)
+void check_for_changes(char *path)
 {
 	chdir(path);
-	File_t *file_list_one = FirstRun(path);	// FilesInDirectory(path); 
-	//printf("\nlocal  : %s\n", path);
-
-	//char dirname[PATH_MAX] = { 0 };
-	//snprintf(dirname, sizeof(dirname), "%s", directory);
-	//char *dir_base_name = PathStrip(dirname);
-
-	//printf("remote : http://%s:%d/%s\n\n", hostname, REMOTE_PORT,dir_base_name);
-
+	File_t *file_list_one = first_run(path);	// FilesInDirectory(path); 
 	for (;;)
 	{
-		check_connection();
 		sleep(changes_interval);
 
 		if (debugging)
@@ -1191,15 +1118,13 @@ void WorkFromPath(char *path)
 			puts("PING!");
 		}
 		
-		check_connection();
-		File_t *file_list_two = FilesInDirectory(path);
+		File_t *file_list_two = files_in_directory(path); 
 
-		CompareFileLists(file_list_one, file_list_two);
-		check_connection();
+		compare_file_lists(file_list_one, file_list_two);
 
-		FileListFree(file_list_one);
+		file_list_free(file_list_one);
 		if (run_once) {
-			free(file_list_two);
+			file_list_free(file_list_two);
 			return;
 		}
 		file_list_one = file_list_two;
@@ -1241,8 +1166,7 @@ struct config_t {
 */
 // if we use a config file, these are the option key=value keys
 
-#define CONFIG_DIRECTORY "DIRECTORY"
-
+//#define CONFIG_DIRECTORY "DIRECTORY"
 //#define CONFIG_HOSTNAME  "HOSTNAME"
 //#define CONFIG_USERNAME  "USERNAME"
 //#define CONFIG_PASSWORD  "PASSWORD"
@@ -1255,7 +1179,7 @@ config_t *ConfigLoad(void)
 	char config_file_path[PATH_MAX] = { 0 };
 
 	snprintf(config_file_path, PATH_MAX, "%s%c%s", DROP_CONFIG_DIRECTORY,
-		 SLASH, DROP_CONFIG_FILE);
+		 SLASH, DROP_CONFIG_DIR_NAME);
 
 	FILE *f = fopen(config_file_path, "r");
 	if (f == NULL)
@@ -1318,39 +1242,13 @@ config_t *ConfigLoad(void)
 }
 */
 
-void About(void)
-{
-	printf("Copyright (c) 2015. Al Poole <netstar@gmail.com>.\n");
-}
-
-void AboutRemoteURL(void)
-{
-	printf("Remote URL http://%s/%s\n", hostname, username);
-}
-
-void Version(void)
-{
-	About();
-	printf("drop version %s\n", PROGRAM_VERSION);
-}
-
-void Usage(void)
-{
-	Version();
-	printf("\nError:\n %s <hostname> <complete path>\n", PROGRAM_NAME);
-	
-	exit(EXIT_FAILURE);
-}
-
-#define UNIX_DESKTOP_FILE "Desktop/ShareFiles"
-
 void check_remote_auth(void)
 {
 	#define SANESTRING 80
 	char stringuser[BUF_MAX] = { 0 };
 	if (username == NULL) {	
 		printf("\nUsername: "); fflush(stdout);
-		fgets(stringuser, SANESTRING, stdin); Trim(stringuser);
+		fgets(stringuser, SANESTRING, stdin); chomp(stringuser);
 		username = strdup(stringuser);
 		if(strlen(stringuser) == 0) {
 			exit(1 << 3);
@@ -1365,7 +1263,7 @@ void check_remote_auth(void)
 	}
 	
 	password = strdup(stringpass);
-	Authenticate();
+	authenticate();
 }
 
 void get_ready(void)
@@ -1402,14 +1300,10 @@ void get_ready(void)
         }
 	
 	snprintf(program_folder, sizeof(program_folder), "%s%c%s", directory,
-		SLASH, DROP_CONFIG_FILE);
+		SLASH, DROP_CONFIG_DIR_NAME);
 	
-	DROP_CONFIG_DIRECTORY = strdup(program_folder);
+	drop_config_directory = strdup(program_folder);
 	
-	// this one is for in-process breaks so we resend all!	
-        snprintf(process_file, sizeof(process_file), "%s%c%s", DROP_CONFIG_DIRECTORY,
-                SLASH, PROCESS_FILE);
-
 	if (use_https_ssl)
 	{
 		init_ssl();
@@ -1417,9 +1311,9 @@ void get_ready(void)
 
         struct stat fstats;
 
-        if (stat(DROP_CONFIG_DIRECTORY, &fstats) < 0)
+        if (stat(drop_config_directory, &fstats) < 0)
         {
-                mkdir(DROP_CONFIG_DIRECTORY, 0777);
+                mkdir(drop_config_directory, 0777);
                 new_repository = 1;
         }
 
@@ -1429,7 +1323,7 @@ void get_ready(void)
         }
 
 	char state_file_path[PATH_MAX] = { 0 };
-	snprintf(state_file_path, PATH_MAX, "%s%c%s", DROP_CONFIG_DIRECTORY,
+	snprintf(state_file_path, PATH_MAX, "%s%c%s", drop_config_directory,
                  SLASH, DROP_STATE_FILE);
 
 	if (stat(state_file_path, &fstats) < 0) {
@@ -1438,6 +1332,17 @@ void get_ready(void)
 }
 
 // username@hostname:directory
+
+void about(void)
+{
+	printf("Copyright (c) 2015. Al Poole <netstar@gmail.com>\n");
+}
+
+void show_version(void)
+{
+	about();
+	printf("drop version %s\n", PROGRAM_VERSION);
+}
 
 void show_usage(void)
 {
@@ -1505,13 +1410,13 @@ int main(int argc, char **argv)
 
 	get_user_host_rsrc(cmd_string);
 
-	Version();
+	show_version();
 
 	check_remote_auth();
 
 	get_ready();
-	
-	WorkFromPath(directory);
+
+	check_for_changes(directory);
 
 	return EXIT_SUCCESS;
 }
