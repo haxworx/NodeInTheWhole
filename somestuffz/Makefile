@@ -1,3 +1,2 @@
 default:
-	gcc -O2 scanner.c -pthread -o scan
-	gcc -O2 s.c -o s
+	gcc -g -std=c99 a.c -o a.out
