@@ -100,11 +100,18 @@ int main(void)
 	char *value = "password";
 
 	hash_table_insert(key, value);
+	hash_table_insert("ed", "gowanlea");
 
 	hash_t *found = hash_table_search("al");	
 	if (found) {
 		printf("%s and %s\n", found->key, found->value);
 	}
+
+	found = hash_table_search("ed");
+	if (found) {
+		printf("%s and %s\n", found->key, found->value);
+	} else
+		printf("not found!\n");
 
 	hash_table_free();
 	
