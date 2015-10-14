@@ -77,7 +77,7 @@ unsigned int hash_gen(char *str)
 	unsigned int res = 0;
 
 	while (*p) {
-		res += (unsigned int) *p;
+		res += (unsigned int) *p + HASH_PRIME;
 		p++;
 	}
 
@@ -90,8 +90,12 @@ hash_t * hash_table_search(char *key)
 	hash_t *tmp = hash_table[idx];
 	if (!tmp)
 		return NULL;
-	
-	return (hash_t *) tmp; 
+
+	while (tmp) {
+		if (!strcmp(tmp->key, key))
+			return (hash_t *) tmp;
+		tmp = tmp->next;
+	}
 }
 
 int main(void)
