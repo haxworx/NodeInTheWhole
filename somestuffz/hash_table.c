@@ -6,7 +6,7 @@
 
 #define TABLE_SIZE 32768 * HASH_PRIME
 
-unsigned int hash_gen(char *str); // don't do this!
+unsigned long hash_gen(char *str); // don't do this!
 
 typedef struct hash_t hash_t;
 struct hash_t {
@@ -71,13 +71,13 @@ void hash_table_insert(char *key, char *value)
 	}
 }
 
-unsigned int hash_gen(char *str)
+unsigned long hash_gen(char *str)
 {
 	char *p = str;
 	unsigned int res = 0;
 
 	while (*p) {
-		res += (unsigned int) *p + HASH_PRIME;
+		res *= (unsigned int) *p + HASH_PRIME;
 		p++;
 	}
 
@@ -100,6 +100,8 @@ hash_t * hash_table_search(char *key)
 
 int main(void)
 {
+	extern hash_t *hash_table[TABLE_SIZE]; 
+
 	char *key = "al";
 	char *value = "password";
 
@@ -117,6 +119,7 @@ int main(void)
 	} else
 		printf("not found!\n");
 
+	// this is slow
 	hash_table_free();
 	
 	return EXIT_SUCCESS;
