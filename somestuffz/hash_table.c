@@ -98,6 +98,17 @@ hash_t * hash_table_search(char *key)
 	}
 }
 
+void hash_table_dump(void)
+{
+	for (int i = 0; i < TABLE_SIZE; i++) {
+		hash_t *cursor = hash_table[i];
+		while (cursor) {
+			printf("key => %s value => %s\n", cursor->key, cursor->value);	
+			cursor = cursor->next;
+		}
+	}
+}
+
 int main(void)
 {
 	extern hash_t *hash_table[TABLE_SIZE]; 
@@ -107,6 +118,7 @@ int main(void)
 
 	hash_table_insert(key, value);
 	hash_table_insert("ed", "gowanlea");
+	hash_table_insert("bryan", "leicester");
 
 	hash_t *found = hash_table_search("al");	
 	if (found) {
@@ -118,6 +130,8 @@ int main(void)
 		printf("%s and %s\n", found->key, found->value);
 	} else
 		printf("not found!\n");
+
+	hash_table_dump();
 
 	// this is slow
 	hash_table_free();
