@@ -1,0 +1,40 @@
+#include "bogomem.h"
+#include "socket.h"
+
+int main(void)
+{
+	
+	pid_t pid = getpid();
+
+	init();
+
+        int sock = Server(9000);
+        if (sock > 0) { 
+                for (;;) {
+                        char buf[8192] = { 0 };
+                        read(sock, buf, sizeof(buf));
+                        if (0 == strcmp(buf, "QUIT")) {
+                                close(sock);
+                                return EXIT_SUCCESS;
+                        }
+                }
+        }
+
+	char *key = "first";
+	memobj_t *obj = GetMemObj(pid, key, 1024);
+	char *s = obj->data;
+
+	strcat(s, "hello!\n");
+	printf("%s", s);
+//	FreeMemObj(pid, obj, key);
+
+	pid = 2;
+
+	obj = GetMemObj(pid, "first", 3128);	
+	s = obj->data;
+	strcat(s, "world!\n");
+	printf("%s", s);
+
+	DumpData();
+	return EXIT_SUCCESS;
+}
